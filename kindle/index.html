@@ -24,7 +24,7 @@
      ecran noir a chaque tourne de page.) */
   .page {
     position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; display: block;
+    object-fit: contain; display: block;
     opacity: 0; transition: opacity .32s ease;
   }
   .page.visible { opacity: 1; }
@@ -67,7 +67,7 @@
 <div id="indice">Balayez pour tourner la page</div>
 
 <script>
-const PAGES = ["images/page-01.jpg?v=6a2a3655","images/page-02.jpg?v=33f62416","images/page-03.jpg?v=7912732a","images/page-04.jpg?v=f6ebb3f6","images/page-05.jpg?v=4ec7a272","images/page-06.jpg?v=6d4a592b","images/page-07.jpg?v=5383f049","images/page-08.jpg?v=07aa368d","images/page-09.jpg?v=812ae5ff","images/page-10.jpg?v=90ddfeb2","images/page-11.jpg?v=43b5b0b6","images/page-12.jpg?v=495eeb31","images/page-13.jpg?v=5a83a257","images/page-14.jpg?v=3c1f588e","images/page-15.jpg?v=60c754bc","images/page-16.jpg?v=c49e5289","images/page-17.jpg?v=04d90bca","images/page-18.jpg?v=2f7aaf97","images/page-19.jpg?v=fb022652","images/page-20.jpg?v=909b00ac","images/page-21.jpg?v=e0902cd3","images/page-22.jpg?v=7f40a95f","images/page-23.jpg?v=4c42c30f","images/page-24.jpg?v=241ae26b","images/page-25.jpg?v=5cfc2f7b","images/page-26.jpg?v=5c5fe5cc"];
+const PAGES = ["images/page-01.jpg?v=dedbac33","images/page-02.jpg?v=33f62416","images/page-03.jpg?v=7912732a","images/page-04.jpg?v=f6ebb3f6","images/page-05.jpg?v=4ec7a272","images/page-06.jpg?v=6d4a592b","images/page-07.jpg?v=5383f049","images/page-08.jpg?v=07aa368d","images/page-09.jpg?v=812ae5ff","images/page-10.jpg?v=90ddfeb2","images/page-11.jpg?v=43b5b0b6","images/page-12.jpg?v=495eeb31","images/page-13.jpg?v=5a83a257","images/page-14.jpg?v=3c1f588e","images/page-15.jpg?v=60c754bc","images/page-16.jpg?v=c49e5289","images/page-17.jpg?v=04d90bca","images/page-18.jpg?v=434613a2","images/page-19.jpg?v=fb022652","images/page-20.jpg?v=909b00ac","images/page-21.jpg?v=e0902cd3","images/page-22.jpg?v=7f40a95f","images/page-23.jpg?v=4c42c30f","images/page-24.jpg?v=241ae26b","images/page-25.jpg?v=5cfc2f7b","images/page-26.jpg?v=5c5fe5cc"];
 const NUIT = '#050a16';
 const scene = document.getElementById('scene');
 const pA = document.getElementById('pA');
