@@ -17,15 +17,17 @@
   /* la hauteur utile reelle sur telephone : barres du navigateur comprises */
   #scene { position: fixed; inset: 0; height: 100dvh; background: var(--nuit); }
 
-  /* DEUX couches : pendant le balayage, la nouvelle page glisse par-dessus
-     l'ancienne. Chaque couche reste plein ecran. */
-  .couche {
-    position: absolute; inset: 0;
-    background-size: cover; background-position: center;
-    background-repeat: no-repeat;
-    will-change: transform, opacity;
+  /* DEUX IMAGES superposees, plein ecran. La nouvelle se FOND par-dessus l'ancienne,
+     qui reste visible jusqu'au dernier moment : aucune trouee, donc aucun ecran noir
+     pendant que la page se charge. (Avant : la page glissait avant d'etre prete, et
+     le fond bleu nuit apparaissait a travers la trouee — l'auteur le voyait comme un
+     ecran noir a chaque tourne de page.) */
+  .page {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+    opacity: 0; transition: opacity .32s ease;
   }
-  .couche img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .page.visible { opacity: 1; }
 
   #barre {
     position: fixed; left: 0; right: 0; bottom: 0;
@@ -58,30 +60,30 @@
 <body>
 <div id="chargement" class="">Ouverture…</div>
 <div id="scene">
-  <div class="couche" id="dessous"></div>
-  <div class="couche" id="dessus"></div>
+  <img class="page" id="pA" alt="">
+  <img class="page" id="pB" alt="">
 </div>
 <div id="barre"><span>Lino le lama</span><span id="compteur">1 / 26</span></div>
 <div id="indice">Balayez pour tourner la page</div>
 
 <script>
-const PAGES = ["images/page-01.jpg?v=febf9710","images/page-02.jpg?v=8993b998","images/page-03.jpg?v=76b3b8fc","images/page-04.jpg?v=ba33dc18","images/page-05.jpg?v=3be2766c","images/page-06.jpg?v=76748fcb","images/page-07.jpg?v=01e31895","images/page-08.jpg?v=42ee1e3d","images/page-09.jpg?v=459e1728","images/page-10.jpg?v=52ee88b9","images/page-11.jpg?v=d9258666","images/page-12.jpg?v=c7096f62","images/page-13.jpg?v=ced47d15","images/page-14.jpg?v=89c8e7e9","images/page-15.jpg?v=18478093","images/page-16.jpg?v=ced8293d","images/page-17.jpg?v=8fffe4b9","images/page-18.jpg?v=ae5bc187","images/page-19.jpg?v=6b198b8e","images/page-20.jpg?v=f93be625","images/page-21.jpg?v=e7793905","images/page-22.jpg?v=59ed639b","images/page-23.jpg?v=115cbeb1","images/page-24.jpg?v=ef28b389","images/page-25.jpg?v=e42b39af","images/page-26.jpg?v=ed6126c6"];
+const PAGES = ["images/page-01.jpg?v=a8a9aca3","images/page-02.jpg?v=8993b998","images/page-03.jpg?v=891ff659","images/page-04.jpg?v=c244222b","images/page-05.jpg?v=ba7b0b1e","images/page-06.jpg?v=8bd2d4be","images/page-07.jpg?v=74441ef0","images/page-08.jpg?v=08f5a83b","images/page-09.jpg?v=0be33d53","images/page-10.jpg?v=4dbeee8a","images/page-11.jpg?v=21fbfb72","images/page-12.jpg?v=23f1d230","images/page-13.jpg?v=90eced7e","images/page-14.jpg?v=fcd89d40","images/page-15.jpg?v=345d2f5a","images/page-16.jpg?v=cda53917","images/page-17.jpg?v=569580b6","images/page-18.jpg?v=814b719f","images/page-19.jpg?v=6501db41","images/page-20.jpg?v=daff53fb","images/page-21.jpg?v=6cbb6e62","images/page-22.jpg?v=f946f8de","images/page-23.jpg?v=39ba42d1","images/page-24.jpg?v=58d639eb","images/page-25.jpg?v=ef23e78c","images/page-26.jpg?v=ed6126c6"];
 const NUIT = '#050a16';
 const scene = document.getElementById('scene');
-const dessous = document.getElementById('dessous');
-const dessus = document.getElementById('dessus');
+const pA = document.getElementById('pA');
+const pB = document.getElementById('pB');
 const compteur = document.getElementById('compteur');
 const barre = document.getElementById('barre');
 const indice = document.getElementById('indice');
 const chargement = document.getElementById('chargement');
 
-let i = 0;            // page courante
+let i = -1;              // page courante (-1 : rien d'affiche encore)
+let devant = pA;         // l'image visible
+let derriere = pB;       // l'image en reserve
 let enMouvement = false;
-let chargees = {};    // index -> true quand l'image est prete
+let chargees = {};       // index -> true quand l'image est prete
 
-function poser(el, k) { el.style.backgroundImage = 'url("' + PAGES[k] + '")'; }
-
-// prechargement : la page suivante et la precedente, sans bloquer l'affichage
+// prechargement : les pages voisines, sans bloquer l'affichage
 function precharger(k) {
   [k + 1, k + 2, k - 1].forEach(function (n) {
     if (n < 0 || n >= PAGES.length || chargees[n]) return;
@@ -91,41 +93,46 @@ function precharger(k) {
   });
 }
 
+function installer(img, k) {
+  return new Promise(function (resoudre) {
+    if (img.dataset.k === String(k) && img.complete && img.naturalWidth) {
+      resoudre(true); return;
+    }
+    img.onload = function () {
+      img.dataset.k = String(k); chargees[k] = true; resoudre(true);
+    };
+    img.onerror = function () { resoudre(false); };
+    img.src = PAGES[k];
+  });
+}
+
+// FONDU ENCHAINÉ. La nouvelle page se fond PAR-DESSUS l'ancienne, qui reste
+// visible jusqu'au dernier moment : aucune trouee pendant le chargement, donc
+// aucun ecran noir. C'est le defaut qui a ete observe sur un vrai telephone :
+// la page glissait avant d'etre prete et le fond nuit apparaissait a travers.
 function afficher(k, anime, sens) {
   if (enMouvement) return;
   k = Math.max(0, Math.min(PAGES.length - 1, k));
-  if (k === i && chargees[i]) return;
+  if (k === i) return;
   enMouvement = true;
-
-  const entrant = document.createElement('div');
-  entrant.className = 'couche';
-  poser(entrant, k);
-  const depart = sens > 0 ? 100 : -100;
-  entrant.style.transform = 'translateX(' + depart + '%)';
-  entrant.style.transition = anime ? 'transform .38s ease-out' : 'none';
-  scene.appendChild(entrant);
-
-  const im = new Image();
-  im.onload = function () {
-    chargees[k] = true;
+  const cible = derriere;
+  installer(cible, k).then(function (ok) {
+    if (!ok) { enMouvement = false; return; }
+    if (!anime) { cible.style.transition = 'none'; }
+    cible.classList.add('visible');
+    if (i >= 0) { devant.classList.remove('visible'); }
+    const tampon = devant; devant = cible; derriere = tampon;
+    i = k;
+    compteur.textContent = (i + 1) + ' / ' + PAGES.length;
     chargement.classList.add('parti');
-    requestAnimationFrame(function () {
-      entrant.style.transform = 'translateX(0)';
-      dessus.style.transform = 'translateX(' + (-depart / 3) + '%)';
-      setTimeout(function () {
-        dessous.style.backgroundImage = dessus.style.backgroundImage;
-        dessus.style.transition = 'none';
-        dessus.style.transform = 'translateX(0)';
-        entrant.remove();
-        i = k;
-        compteur.textContent = (i + 1) + ' / ' + PAGES.length;
-        enMouvement = false;
-        precharger(i);
-      }, anime ? 400 : 20);
-    });
-  };
-  im.onerror = function () { enMouvement = false; entrant.remove(); };
-  im.src = PAGES[k];
+    indice.classList.add('parti');
+    montrerBarre();
+    precharger(i);
+    setTimeout(function () {
+      cible.style.transition = '';
+      enMouvement = false;
+    }, anime ? 340 : 0);
+  });
 }
 
 function montrerBarre() {
@@ -164,19 +171,10 @@ document.addEventListener('keydown', function (e) {
 });
 
 // --- demarrage ----------------------------------------------------------
-poser(dessous, 0);
-dessus.style.backgroundImage = 'none';
-const premier = new Image();
-premier.onload = function () {
-  chargees[0] = true;
-  chargees[1] = true;
-  chargement.classList.add('parti');
-  indice.classList.add('parti');
-  montrerBarre();
-  precharger(0);
-};
-premier.onerror = function () { chargement.textContent = 'Page introuvable'; };
-premier.src = PAGES[0];
+afficher(0, false, 1);
+setTimeout(function () {
+  if (i < 0) { chargement.textContent = 'Page introuvable'; }
+}, 15000);
 setTimeout(function () { indice.classList.add('parti'); }, 4000);
 </script>
 </body>
