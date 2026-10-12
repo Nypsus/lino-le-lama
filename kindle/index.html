@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#050a16">
+<title>Lino le lama (fichier Kindle) — Les Petites Bêtes de la Vallée</title>
+<style>
+  :root { --nuit: #050a16; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: var(--nuit);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  /* la hauteur utile reelle sur telephone : barres du navigateur comprises */
+  #scene { position: fixed; inset: 0; height: 100dvh; background: var(--nuit); }
+
+  /* DEUX IMAGES superposees, plein ecran. La nouvelle se FOND par-dessus l'ancienne,
+     qui reste visible jusqu'au dernier moment : aucune trouee, donc aucun ecran noir
+     pendant que la page se charge. (Avant : la page glissait avant d'etre prete, et
+     le fond bleu nuit apparaissait a travers la trouee — l'auteur le voyait comme un
+     ecran noir a chaque tourne de page.) */
+  .page {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+    opacity: 0; transition: opacity .32s ease;
+  }
+  .page.visible { opacity: 1; }
+
+  #barre {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: rgba(255,255,255,.55); pointer-events: none;
+    transition: opacity .6s ease; opacity: 0;
+  }
+  #barre.visible { opacity: 1; }
+  #indice {
+    position: fixed; left: 50%; bottom: 46%;
+    transform: translateX(-50%);
+    padding: 10px 20px; border-radius: 999px;
+    background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18);
+    color: #fff; font-size: 13px; letter-spacing: .06em;
+    backdrop-filter: blur(6px); pointer-events: none;
+    transition: opacity .8s ease; opacity: 1;
+  }
+  #indice.parti { opacity: 0; }
+  #chargement {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: var(--nuit); color: rgba(255,255,255,.75);
+    font-size: 14px; letter-spacing: .18em; text-transform: uppercase;
+    transition: opacity .5s ease;
+  }
+  #chargement.parti { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="chargement" class="">Ouverture…</div>
+<div id="scene">
+  <img class="page" id="pA" alt="">
+  <img class="page" id="pB" alt="">
+</div>
+<div id="barre"><span>Lino le lama (fichier Kindle)</span><span id="compteur">1 / 26</span></div>
+<div id="indice">Balayez pour tourner la page</div>
+
+<script>
+const PAGES = ["images/page-01.jpg?v=6a2a3655","images/page-02.jpg?v=33f62416","images/page-03.jpg?v=7912732a","images/page-04.jpg?v=f6ebb3f6","images/page-05.jpg?v=4ec7a272","images/page-06.jpg?v=6d4a592b","images/page-07.jpg?v=5383f049","images/page-08.jpg?v=07aa368d","images/page-09.jpg?v=812ae5ff","images/page-10.jpg?v=90ddfeb2","images/page-11.jpg?v=43b5b0b6","images/page-12.jpg?v=495eeb31","images/page-13.jpg?v=5a83a257","images/page-14.jpg?v=3c1f588e","images/page-15.jpg?v=60c754bc","images/page-16.jpg?v=c49e5289","images/page-17.jpg?v=04d90bca","images/page-18.jpg?v=2f7aaf97","images/page-19.jpg?v=fb022652","images/page-20.jpg?v=909b00ac","images/page-21.jpg?v=e0902cd3","images/page-22.jpg?v=7f40a95f","images/page-23.jpg?v=4c42c30f","images/page-24.jpg?v=241ae26b","images/page-25.jpg?v=5cfc2f7b","images/page-26.jpg?v=5c5fe5cc"];
+const NUIT = '#050a16';
+const scene = document.getElementById('scene');
+const pA = document.getElementById('pA');
+const pB = document.getElementById('pB');
+const compteur = document.getElementById('compteur');
+const barre = document.getElementById('barre');
+const indice = document.getElementById('indice');
+const chargement = document.getElementById('chargement');
+
+let i = -1;              // page courante (-1 : rien d'affiche encore)
+let devant = pA;         // l'image visible
+let derriere = pB;       // l'image en reserve
+let enMouvement = false;
+let chargees = {};       // index -> true quand l'image est prete
+
+// prechargement : les pages voisines, sans bloquer l'affichage
+function precharger(k) {
+  [k + 1, k + 2, k - 1].forEach(function (n) {
+    if (n < 0 || n >= PAGES.length || chargees[n]) return;
+    const im = new Image();
+    im.onload = function () { chargees[n] = true; };
+    im.src = PAGES[n];
+  });
+}
+
+function installer(img, k) {
+  return new Promise(function (resoudre) {
+    if (img.dataset.k === String(k) && img.complete && img.naturalWidth) {
+      resoudre(true); return;
+    }
+    img.onload = function () {
+      img.dataset.k = String(k); chargees[k] = true; resoudre(true);
+    };
+    img.onerror = function () { resoudre(false); };
+    img.src = PAGES[k];
+  });
+}
+
+// FONDU ENCHAINÉ. La nouvelle page se fond PAR-DESSUS l'ancienne, qui reste
+// visible jusqu'au dernier moment : aucune trouee pendant le chargement, donc
+// aucun ecran noir. C'est le defaut qui a ete observe sur un vrai telephone :
+// la page glissait avant d'etre prete et le fond nuit apparaissait a travers.
+function afficher(k, anime, sens) {
+  if (enMouvement) return;
+  k = Math.max(0, Math.min(PAGES.length - 1, k));
+  if (k === i) return;
+  enMouvement = true;
+  const cible = derriere;
+  installer(cible, k).then(function (ok) {
+    if (!ok) { enMouvement = false; return; }
+    if (!anime) { cible.style.transition = 'none'; }
+    cible.classList.add('visible');
+    if (i >= 0) { devant.classList.remove('visible'); }
+    const tampon = devant; devant = cible; derriere = tampon;
+    i = k;
+    compteur.textContent = (i + 1) + ' / ' + PAGES.length;
+    chargement.classList.add('parti');
+    indice.classList.add('parti');
+    montrerBarre();
+    precharger(i);
+    setTimeout(function () {
+      cible.style.transition = '';
+      enMouvement = false;
+    }, anime ? 340 : 0);
+  });
+}
+
+function montrerBarre() {
+  barre.classList.add('visible');
+  clearTimeout(window.__t);
+  window.__t = setTimeout(function () { barre.classList.remove('visible'); }, 2200);
+}
+
+// --- gestes -------------------------------------------------------------
+let x0 = null, y0 = null, t0 = 0;
+scene.addEventListener('touchstart', function (e) {
+  x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now();
+  indice.classList.add('parti');
+  montrerBarre();
+}, { passive: true });
+scene.addEventListener('touchend', function (e) {
+  if (x0 === null) return;
+  const dx = e.changedTouches[0].clientX - x0;
+  const dy = e.changedTouches[0].clientY - y0;
+  const rapide = Date.now() - t0 < 260;
+  if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+    afficher(i + (dx < 0 ? 1 : -1), true, dx < 0 ? 1 : -1);
+  } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+    // un simple tap : la moitie droite avance, la moitie gauche recule
+    afficher(i + (e.changedTouches[0].clientX > window.innerWidth / 2 ? 1 : -1), true,
+             e.changedTouches[0].clientX > window.innerWidth / 2 ? 1 : -1);
+  } else if (rapide && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+    afficher(i + 1, true, 1);
+  }
+  x0 = null; y0 = null;
+}, { passive: true });
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowRight' || e.key === ' ') afficher(i + 1, true, 1);
+  if (e.key === 'ArrowLeft') afficher(i - 1, true, -1);
+});
+
+// --- demarrage ----------------------------------------------------------
+afficher(0, false, 1);
+setTimeout(function () {
+  if (i < 0) { chargement.textContent = 'Page introuvable'; }
+}, 15000);
+setTimeout(function () { indice.classList.add('parti'); }, 4000);
+</script>
+</body>
+</html>
